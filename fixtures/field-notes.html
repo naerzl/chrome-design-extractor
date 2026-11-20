@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Field Notes / private-fixture-title-07d96c</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --color-surface: #f6f5ef;
+      --color-on-surface: #162822;
+      --color-primary: #145344;
+      --color-on-primary: #ffffff;
+      --color-panel: #fffcf5;
+      --color-muted: #3f6558;
+      --color-rule: #ccd9cd;
+      --color-wash: #cee0c6;
+      --space-sm: 8px;
+      --space-md: 16px;
+      --space-lg: 24px;
+      --radius-md: 8px;
+      font: 16px/1.5 system-ui, sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --color-surface: #132720;
+        --color-on-surface: #f2f4e9;
+        --color-primary: #a0d0b8;
+        --color-on-primary: #11352b;
+        --color-panel: #1a3329;
+        --color-muted: #becdbd;
+        --color-rule: #406052;
+        --color-wash: #3b5e43;
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--color-on-surface);
+      background: var(--color-surface);
+    }
+
+    a { color: var(--color-primary); }
+
+    :focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 4px;
+    }
+
+    .shell {
+      width: calc(100% - 48px);
+      max-width: 1120px;
+      margin-inline: auto;
+    }
+
+    header {
+      border-bottom: 1px solid var(--color-rule);
+    }
+
+    nav {
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-md);
+    }
+
+    .wordmark {
+      font-family: Georgia, serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--color-on-surface);
+      text-decoration: none;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
+      gap: var(--space-lg);
+      align-items: stretch;
+      padding-block: clamp(36px, 6vw, 84px) 40px;
+    }
+
+    .hero-copy { align-self: center; }
+
+    h1, h2, h3 {
+      font-family: Georgia, serif;
+      margin-block: 0;
+    }
+
+    h1 {
+      font-size: 40px;
+      line-height: 1.15;
+      letter-spacing: -.03em;
+      max-width: 14ch;
+    }
+
+    h2 { font-size: 28px; }
+    h3 { font-size: 22px; }
+
+    p { margin-block: var(--space-sm) var(--space-md); }
+
+    .intro {
+      max-width: 38ch;
+      color: var(--color-muted);
+    }
+
+    .wash {
+      min-height: 220px;
+      border: 1px solid var(--color-rule);
+      border-radius: var(--radius-md);
+      background:
+        radial-gradient(ellipse at 78% 20%, var(--color-panel), transparent 52%),
+        linear-gradient(135deg, var(--color-wash), var(--color-surface));
+    }
+
+    .action {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 18px;
+      border: 1px solid var(--color-primary);
+      border-radius: var(--radius-md);
+      color: var(--color-on-primary);
+      background: var(--color-primary);
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    #primary-action { transition: transform 180ms ease-out; }
+    #primary-action:hover { transform: translateY(-2px); }
+
+    #sample-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-lg);
+      margin-top: var(--space-md);
+    }
+
+    .note {
+      border: 1px solid var(--color-rule);
+      border-radius: var(--radius-md);
+      background: var(--color-panel);
+      padding: var(--space-lg);
+    }
+
+    .dot {
+      display: block;
+      width: 20px;
+      height: 20px;
+      margin-bottom: var(--space-md);
+      border-radius: 100%;
+      background: var(--color-wash);
+      border: 1px solid var(--color-rule);
+    }
+
+    .note .action {
+      background: transparent;
+      color: var(--color-primary);
+    }
+
+    .storage-sample {
+      display: grid;
+      max-width: 36ch;
+      margin-block: 36px 60px;
+      gap: var(--space-sm);
+      color: var(--color-muted);
+    }
+
+    input {
+      width: 100%;
+      min-height: 44px;
+      padding-inline: 12px;
+      border: 1px solid var(--color-rule);
+      border-radius: var(--radius-md);
+      background: var(--color-panel);
+      color: var(--color-on-surface);
+      font: inherit;
+    }
+
+    #css-target.mark {
+      animation: field-mark 420ms ease-in-out;
+    }
+
+    @keyframes field-mark {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.35); opacity: .55; }
+    }
+
+    @media (max-width: 760px) {
+      .shell { width: calc(100% - 32px); }
+      .hero, #sample-grid { grid-template-columns: 1fr; }
+      .wash { min-height: 140px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #primary-action { transition: none; }
+      #primary-action:hover { transform: none; }
+      #css-target.mark { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <nav class="shell" aria-label="Site navigation">
+      <a class="wordmark" href="#sample-main">Field Notes</a>
+      <a href="#specimens">Browse specimens</a>
+    </nav>
+  </header>
+  <main class="shell" id="sample-main">
+    <section class="hero" aria-labelledby="heading">
+      <div class="hero-copy">
+        <h1 id="heading">A small guide to the forest floor</h1>
+        <p class="intro">A reference collection of overlooked forms, from the first spring fern to lichen on a fallen branch.</p>
+        <button type="button" class="action" id="primary-action">Hover to lift</button>
+      </div>
+      <div class="wash" aria-hidden="true"></div>
+    </section>
+
+    <section id="specimens" aria-labelledby="specimen-heading">
+      <h2 id="specimen-heading">Specimens</h2>
+      <div id="sample-grid">
+        <article class="note">
+          <span class="dot" id="css-target" aria-hidden="true"></span>
+          <h3>Fern frond</h3>
+          <p>A repeating leaf shape with a soft, finely divided edge.</p>
+          <button type="button" class="action" id="css-trigger">Play CSS effect</button>
+        </article>
+        <article class="note">
+          <span class="dot" id="waapi-target" aria-hidden="true"></span>
+          <h3>Moss cushion</h3>
+          <p>A dense patch of tiny shoots that holds moisture.</p>
+          <button type="button" class="action" id="waapi-trigger">Play Web Animations effect</button>
+        </article>
+        <article class="note">
+          <span class="dot" aria-hidden="true"></span>
+          <h3>Reindeer lichen</h3>
+          <p>Pale, branching tips with a springy structure.</p>
+        </article>
+      </div>
+    </section>
+
+    <div class="storage-sample">
+      <label for="private-field">Synthetic private field</label>
+      <input id="private-field" name="private-field" type="text" autocomplete="off"
+        value="private-fixture-value-3fa8e1" placeholder="private-fixture-placeholder-8bf2c0">
+      <small>private-fixture-body-06b47d</small>
+    </div>
+  </main>
+  <script>
+    const cssTarget = document.querySelector('#css-target');
+    const waapiTarget = document.querySelector('#waapi-target');
+    const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
+    let webAnimation;
+
+    document.querySelector('#css-trigger').addEventListener('click', () => {
+      if (motionPreference.matches || cssTarget.classList.contains('mark')) return;
+      cssTarget.classList.add('mark');
+    });
+    for (const type of ['animationend', 'animationcancel']) {
+      cssTarget.addEventListener(type, () => cssTarget.classList.remove('mark'));
+    }
+    document.querySelector('#waapi-trigger').addEventListener('click', () => {
+      if (motionPreference.matches) return;
+      webAnimation?.cancel();
+      webAnimation = waapiTarget.animate([
+        { transform: 'translateY(0)', opacity: 1 },
+        { transform: 'translateY(-6px)', opacity: .6 },
+        { transform: 'translateY(0)', opacity: 1 },
+      ], {
+        duration: 480,
+        easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)',
+      });
+    });
+    motionPreference.addEventListener('change', () => {
+      if (motionPreference.matches) webAnimation?.cancel();
+    });
+  </script>
+</body>
+</html>

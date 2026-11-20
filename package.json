@@ -1,0 +1,26 @@
+{
+  "name": "chrome-design-extractor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first Chrome extension that exports a page's design as DESIGN.md.",
+  "license": "MIT",
+  "engines": { "node": ">=22.18.0" },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "node --disable-warning=ExperimentalWarning --test tests/*.test.ts",
+    "build": "node scripts/build.mjs",
+    "demo": "node scripts/demo.mjs",
+    "test:browser": "npm run build && node --test tests/extension.browser.mjs",
+    "package": "npm run build && node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "@google/design.md": "0.4.0",
+    "@types/chrome": "^0.1.0",
+    "esbuild": "^0.25.0",
+    "fflate": "^0.8.2",
+    "playwright": "^1.62.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.0"
+  }
+}

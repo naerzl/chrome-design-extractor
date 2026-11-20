@@ -1,0 +1,4 @@
+{
+  "extensionName": { "message": "Design Lens 网页设计采集" },
+  "extensionDescription": { "message": "采集当前页面的颜色、排版、布局和动效，在本地预览并导出 DESIGN.md。" }
+}
