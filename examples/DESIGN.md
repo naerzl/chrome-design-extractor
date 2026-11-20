@@ -6,7 +6,7 @@ colors:
   on-surface: "#162822"
   primary: "#145344"
   on-primary: "#FFFFFF"
-  surface-container: "#CEE0C6"
+  surface-container: "#FFFCF5"
   outline: "#CCD9CD"
 typography:
   headline:
@@ -50,12 +50,12 @@ components:
     rounded: "{rounded.rounded-8}"
     height: "44px"
   input:
-    backgroundColor: "#FFFCF5"
+    backgroundColor: "{colors.surface-container}"
     textColor: "{colors.on-surface}"
     rounded: "{rounded.rounded-8}"
     height: "44px"
   card:
-    backgroundColor: "#FFFCF5"
+    backgroundColor: "{colors.surface-container}"
     textColor: "{colors.on-surface}"
     rounded: "{rounded.rounded-8}"
     padding: "24px"
@@ -71,12 +71,12 @@ Design roles and reusable patterns are inferred from the visible sample. Measure
 
 ## Colors
 
-- **surface** `#F6F5EF`. Page or dominant content surface (1 matching sample).
-- **on-surface** `#162822`. Frequently observed text on reading surfaces (8 matching samples).
-- **primary** `#145344`. Candidate emphasis color from buttons and links (1 matching sample).
-- **on-primary** `#FFFFFF`. Foreground sampled from actions using the candidate primary fill (1 matching sample).
-- **surface-container** `#CEE0C6`. Secondary region or component surface (3 matching samples).
-- **outline** `#CCD9CD`. Frequently observed visible border color (9 matching samples).
+- **surface** `#F6F5EF`. Page or dominant content surface (background the page text is read on (1212480 px²)).
+- **on-surface** `#162822`. Text color read on the page surface (text color read on the page surface).
+- **primary** `#145344`. Candidate emphasis color from buttons, links, and colored backdrops (fill of a button or link that differs from its own text).
+- **on-primary** `#FFFFFF`. Foreground sampled from actions using the candidate primary fill (text sitting on the primary fill).
+- **surface-container** `#FFFCF5`. Secondary region or component surface (largest secondary background (251896 px²)).
+- **outline** `#CCD9CD`. Frequently observed visible border color (most common visible border color).
 - Observed gradient `radial-gradient(at 78% 20%, rgb(255, 252, 245), rgba(0, 0, 0, 0) 52%), linear-gradient(135deg, rgb(206, 224, 198), rgb(246, 245, 239))`.
 
 ## Typography
@@ -138,7 +138,7 @@ Motion evidence at 1440 × 900 CSS px.
 | Target | Evidence | Source | Properties | Duration | Delay | Easing | Iterations |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | button | observed | css-transition | `transform` | 180ms | 0ms | `ease-out` | 1 |
-| button | observed | css-transition | `transform` | 51.59968775321039ms | 0ms | `ease-out` | 1 |
+| button | observed | css-transition | `transform` | 51.68314611992551ms | 0ms | `ease-out` | 1 |
 | container | observed | css-animation | `opacity`, `transform` | 420ms | 0ms | `ease-in-out` | 1 |
 | button | declared | css-transition | `transform` | 180ms | 0ms | `ease-out` | 1 |
 
@@ -146,7 +146,7 @@ Motion evidence at 390 × 900 CSS px.
 
 | Target | Evidence | Source | Properties | Duration | Delay | Easing | Iterations |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| button | observed | css-transition | `transform` | 51.59968775321039ms | 0ms | `ease-out` | 1 |
+| button | observed | css-transition | `transform` | 51.68314611992551ms | 0ms | `ease-out` | 1 |
 | container | observed | css-animation | `opacity`, `transform` | 420ms | 0ms | `ease-in-out` | 1 |
 | container | observed | web-animation | `opacity`, `transform` | 480ms | 0ms | `cubic-bezier(0.2, 0.7, 0.2, 1)` | 1 |
 | button | declared | css-transition | `transform` | 180ms | 0ms | `ease-out` | 1 |

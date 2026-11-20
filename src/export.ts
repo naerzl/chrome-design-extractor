@@ -37,8 +37,8 @@ function describeLayout(entry: LayoutEntry): string {
 
 const colorUse: Record<string, string> = {
   surface: 'Page or dominant content surface',
-  'on-surface': 'Frequently observed text on reading surfaces',
-  primary: 'Candidate emphasis color from buttons and links',
+  'on-surface': 'Text color read on the page surface',
+  primary: 'Candidate emphasis color from buttons, links, and colored backdrops',
   'on-primary': 'Foreground sampled from actions using the candidate primary fill',
   'surface-container': 'Secondary region or component surface',
   outline: 'Frequently observed visible border color',
@@ -100,7 +100,8 @@ export function exportDesign(analysis: DesignAnalysis, options: DesignExportOpti
   if (palette.length || analysis.gradients.length) {
     addHeading(lines, '## Colors');
     for (const entry of palette) {
-      const basis = entry.edited ? 'user-edited value' : `${entry.samples} matching ${entry.samples === 1 ? 'sample' : 'samples'}`;
+      const basis = entry.edited ? 'user-edited value'
+        : `${entry.basis || `${entry.samples} matching ${entry.samples === 1 ? 'sample' : 'samples'}`}`;
       lines.push(`- **${entry.role}** ${inlineCode(entry.value)}. ${colorUse[entry.role] ?? 'Sampled palette color'} (${basis}).`);
     }
     for (const gradient of analysis.gradients) lines.push(`- Observed gradient ${inlineCode(gradient)}.`);

@@ -1,10 +1,14 @@
 import type { CaptureSnapshot, ElementRole, StyleSample } from './schema.ts';
+import { gradientStops } from './css-values.ts';
+import { colorKey, isOpaqueColor, resolveColor } from './color.ts';
 
 export interface PaletteEntry {
   role: string;
   value: string;
   samples: number;
   evidence: 'inferred';
+  /** Where the inference found this color, shown so a user can judge or override it. */
+  basis: string;
 }
 
 export interface TypographyEntry {
@@ -143,11 +147,49 @@ function groupValues(values: string[]): Array<[string, number]> {
   return Array.from(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'en'));
 }
 
-function commonColor(samples: StyleSample[], property: 'color' | 'backgroundColor' | 'borderColor' | 'fill') {
-  return groupValues(samples.flatMap((sample) => {
-    const value = normalizeDesignColor(sample[property]);
-    return value ? [value] : [];
-  }))[0];
+type ColorProperty = 'color' | 'backgroundColor' | 'borderColor' | 'fill' | 'backdrop';
+
+function colorOf(sample: StyleSample, property: ColorProperty): string | null {
+  return normalizeDesignColor(sample[property]);
+}
+
+/**
+ * The hex form of a color, used for the palette values that reach DESIGN.md.
+ * A page may express one color in several notations; the exported token should
+ * not depend on which notation happened to win the vote.
+ */
+function displayColor(value: string): string {
+  const key = colorKey(value);
+  return key ?? value;
+}
+
+/**
+ * The most common color of a property, counted by resolved sRGB value.
+ * The original notation is kept for display, but two notations of one color
+ * must not split into separate votes.
+ */
+function commonColor(
+  samples: StyleSample[],
+  property: ColorProperty,
+  areaOf?: (sample: StyleSample) => number,
+): { color: string; samples: number } | undefined {
+  const counts = new Map<string, { count: number; area: number; color: string }>();
+  for (const sample of samples) {
+    const value = colorOf(sample, property);
+    if (!value) continue;
+    const key = colorKey(value);
+    if (!key) continue;
+    const existing = counts.get(key);
+    const area = areaOf ? areaOf(sample) : 0;
+    if (existing) {
+      existing.count += 1;
+      existing.area += area;
+    } else {
+      counts.set(key, { count: 1, area, color: value });
+    }
+  }
+  const best = [...counts.values()].sort((a, b) => b.area - a.area || b.count - a.count)[0];
+  return best ? { color: best.color, samples: best.count } : undefined;
 }
 
 function mostCommon<T>(values: T[], key: (value: T) => string): T | undefined {
@@ -170,40 +212,235 @@ function area(sample: StyleSample, width: number, height: number): number {
 
 const regionRoles = new Set<ElementRole>(['page', 'header', 'navigation', 'main', 'section', 'footer', 'card', 'list', 'container']);
 
+interface ColorUse {
+  key: string;
+  color: string;
+  samples: number;
+  area: number;
+}
+
+function collectUses(
+  samples: StyleSample[],
+  property: ColorProperty,
+  areaOf: (sample: StyleSample) => number,
+  opaqueOnly = false,
+): ColorUse[] {
+  const uses = new Map<string, ColorUse>();
+  for (const sample of samples) {
+    const color = colorOf(sample, property);
+    if (!color) continue;
+    if (opaqueOnly && !isOpaqueColor(color)) continue;
+    const key = colorKey(color);
+    if (!key) continue;
+    const area = areaOf(sample);
+    const existing = uses.get(key);
+    if (existing) {
+      existing.samples += 1;
+      existing.area += area;
+    } else {
+      uses.set(key, { key, color, samples: 1, area });
+    }
+  }
+  return [...uses.values()].sort((a, b) => b.area - a.area || b.samples - a.samples);
+}
+
+function relativeLuminance(color: string): number | null {
+  const resolved = resolveColor(color);
+  if (!resolved) return null;
+  const channels = [resolved.red, resolved.green, resolved.blue].map((value) => value / 255)
+    .map((value) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+function contrastRatio(first: string, second: string): number | null {
+  const a = relativeLuminance(first);
+  const b = relativeLuminance(second);
+  if (a === null || b === null) return null;
+  const lighter = Math.max(a, b);
+  const darker = Math.min(a, b);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/** Text-bearing roles. Only these elements can tell us what a backdrop is used for. */
+const textRoles = new Set<ElementRole>(['text', 'heading', 'button', 'link', 'input']);
+
+/**
+ * Colors painted behind text, weighted by the area of the text sitting on them.
+ * This is what identifies an emphasis color on a saturated hero, where the
+ * emphasis lives in the backdrop rather than in a flat button background.
+ */
+function backdropUses(samples: StyleSample[]): ColorUse[] {
+  const uses = new Map<string, ColorUse>();
+  for (const sample of samples) {
+    if (!textRoles.has(sample.role)) continue;
+    const backdrop = normalizeDesignColor(sample.backdrop);
+    const foreground = colorOf(sample, 'color');
+    if (!backdrop || !foreground) continue;
+    const key = colorKey(backdrop);
+    if (!key) continue;
+    const weight = 1;
+    const existing = uses.get(key);
+    if (existing) {
+      existing.samples += weight;
+      existing.area += sample.rect.width * sample.rect.height * weight;
+    } else {
+      uses.set(key, { key, color: backdrop, samples: weight, area: sample.rect.width * sample.rect.height * weight });
+    }
+  }
+  return [...uses.values()].sort((a, b) => b.area - a.area);
+}
+
+/** The most common text color sitting on a given backdrop. */
+function foregroundOn(samples: StyleSample[], backdrop: string): { color: string; samples: number } | undefined {
+  const key = colorKey(backdrop);
+  if (!key) return undefined;
+  return commonColor(
+    samples.filter((sample) => {
+      const value = normalizeDesignColor(sample.backdrop);
+      return value !== null && colorKey(value) === key;
+    }),
+    'color',
+  );
+}
+
+function gradientUses(samples: StyleSample[]): ColorUse[] {
+  const uses = new Map<string, ColorUse>();
+  for (const sample of samples) {
+    if (!sample.gradient) continue;
+    const area = sample.rect.width * sample.rect.height;
+    const layers = gradientStops(sample.gradient);
+    const stops = layers[0] ?? [];
+    stops.forEach((stop, index) => {
+      const color = normalizeDesignColor(stop);
+      if (!color) return;
+      const key = colorKey(color);
+      if (!key) return;
+      // The first stop is the one a designer means by "the color of this gradient".
+      const weight = index === 0 ? 1 : 0.4;
+      const existing = uses.get(key);
+      if (existing) {
+        existing.samples += weight;
+        existing.area += area * weight;
+      } else {
+        uses.set(key, { key, color, samples: weight, area: area * weight });
+      }
+    });
+  }
+  return [...uses.values()].sort((a, b) => b.area - a.area);
+}
+
 function inferPalette(snapshot: CaptureSnapshot, samples: StyleSample[]): PaletteEntry[] {
   const entries: PaletteEntry[] = [];
-  const add = (role: string, color: [string, number] | undefined) => {
-    if (color) entries.push({ role, value: color[0], samples: color[1], evidence: 'inferred' });
+  const add = (role: string, color: { color: string; samples: number } | undefined, basis: string) => {
+    if (color) {
+      entries.push({
+        role,
+        value: displayColor(color.color),
+        samples: color.samples,
+        evidence: 'inferred',
+        basis,
+      });
+    }
   };
 
   const { width, height } = snapshot.context;
+  const areaOf = (sample: StyleSample) => area(sample, width, height);
   const sortedRegions = samples.filter((sample) => regionRoles.has(sample.role) && normalizeDesignColor(sample.backgroundColor))
     .sort((a, b) => area(b, width, height) - area(a, width, height));
-  const surface = commonColor(samples.filter(({ role }) => role === 'page'), 'backgroundColor')
-    ?? commonColor(sortedRegions.slice(0, 3), 'backgroundColor');
-  add('surface', surface);
+  // The page surface is the backdrop the page's own text is read on.
+  const readingUses = collectUses(
+    samples.filter(({ role }) => role === 'text' || role === 'heading'),
+    'backdrop',
+    areaOf,
+  );
+  const pageUses = collectUses(samples.filter(({ role }) => role === 'page'), 'backgroundColor', areaOf, true);
+  const regionUses = collectUses(sortedRegions.slice(0, 4), 'backgroundColor', areaOf, true);
+  // A page that paints its own background states the surface outright.
+  const surface = pageUses[0] ?? readingUses[0] ?? regionUses[0];
+  add('surface', surface, surface
+    ? `background the page text is read on (${Math.round(surface.area)} px²)`
+    : '');
 
   const bodyText = samples.filter(({ role }) => role === 'text' || role === 'heading');
-  add('on-surface', commonColor(bodyText, 'color') ?? commonColor(samples.filter(({ role }) => role === 'page'), 'color'));
+  // Text that sits on the page surface is what a reader actually reads.
+  const surfaceKey = surface?.key ?? null;
+  const onSurfaceText = bodyText.filter((sample) => {
+    const value = normalizeDesignColor(sample.backdrop);
+    return value !== null && colorKey(value) === surfaceKey;
+  });
+  // Weighted by area so the dominant reading color wins over a repeated accent.
+  const onSurface = commonColor(onSurfaceText.length ? onSurfaceText : bodyText, 'color', areaOf)
+    ?? commonColor(samples.filter(({ role }) => role === 'page'), 'color');
+  add('on-surface', onSurface, 'text color read on the page surface');
 
+  const ink = onSurface?.color;
   const actions = samples.filter(({ role }) => role === 'button' || role === 'link');
   const filledActions = actions.filter((sample) => {
-    const background = normalizeDesignColor(sample.backgroundColor);
-    return background && background !== surface?.[0] && background !== normalizeDesignColor(sample.color);
+    const background = colorOf(sample, 'backgroundColor');
+    if (!background || !isOpaqueColor(background)) return false;
+    const backgroundKey = colorKey(background);
+    const textKey = colorKey(colorOf(sample, 'color') ?? '');
+    return backgroundKey !== null && backgroundKey !== surface?.key && backgroundKey !== textKey;
   });
   const actionFill = commonColor(filledActions, 'backgroundColor');
-  const ink = entries.find(({ role }) => role === 'on-surface')?.value;
-  const actionText = commonColor(actions.filter((sample) => normalizeDesignColor(sample.color) !== ink), 'color');
-  add('primary', actionFill ?? actionText);
+
+  // A brand color is frequently the backdrop of a hero rather than a flat button fill.
+  const backdrops = backdropUses(samples);
+  const brandBackdrop = backdrops.find((use) => {
+    if (use.key === surface?.key) return false;
+    const onBackdrop = foregroundOn(samples, use.color);
+    if (!onBackdrop || colorKey(onBackdrop.color) === use.key) return false;
+    const ratio = contrastRatio(use.color, onBackdrop.color);
+    return ratio !== null && ratio >= 3;
+  });
+  const gradients = gradientUses(samples);
+
+  let primary: { color: string; samples: number } | undefined;
+  let primaryBasis = '';
+  if (actionFill) {
+    primary = actionFill;
+    primaryBasis = 'fill of a button or link that differs from its own text';
+  } else if (brandBackdrop && brandBackdrop.area > 0) {
+    primary = { color: brandBackdrop.color, samples: brandBackdrop.samples };
+    primaryBasis = 'color painted behind high-contrast text';
+  } else if (gradients.length) {
+    primary = { color: gradients[0].color, samples: gradients[0].samples };
+    primaryBasis = 'first color stop of the largest gradient';
+  } else {
+    const inkKey = ink ? colorKey(ink) : null;
+    primary = commonColor(actions.filter((sample) => {
+      const value = colorOf(sample, 'color');
+      return value !== null && colorKey(value) !== inkKey;
+    }), 'color');
+    primaryBasis = 'text color of a button or link';
+  }
+  add('primary', primary, primaryBasis);
 
   if (actionFill) {
-    add('on-primary', commonColor(filledActions.filter((sample) => normalizeDesignColor(sample.backgroundColor) === actionFill[0]), 'color'));
+    const fillKey = colorKey(actionFill.color);
+    const onPrimary = commonColor(filledActions.filter((sample) => {
+      const value = colorOf(sample, 'backgroundColor');
+      return value !== null && colorKey(value) === fillKey;
+    }), 'color');
+    add('on-primary', onPrimary, 'text sitting on the primary fill');
   }
 
-  const surfaceAlternatives = sortedRegions.filter((sample) => normalizeDesignColor(sample.backgroundColor) !== surface?.[0]);
-  add('surface-container', commonColor(surfaceAlternatives, 'backgroundColor'));
-  add('outline', commonColor(samples, 'borderColor'));
-  add('icon', commonColor(samples, 'fill'));
+  const containerUses = collectUses(
+    sortedRegions.filter((sample) => {
+      const value = colorOf(sample, 'backgroundColor');
+      return value !== null && colorKey(value) !== surfaceKey;
+    }),
+    'backgroundColor',
+    areaOf,
+  );
+  const container = containerUses[0];
+  add('surface-container', container, container
+    ? `largest secondary background (${Math.round(container.area)} px²)`
+    : '');
+  const outline = commonColor(samples, 'borderColor');
+  add('outline', outline, 'most common visible border color');
+  const icon = commonColor(samples, 'fill');
+  add('icon', icon, 'most common SVG icon fill');
 
   return entries;
 }

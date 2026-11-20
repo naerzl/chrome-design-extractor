@@ -21,6 +21,16 @@ For a manual update, replace the files in the installed directory with the new p
 
 If you switch to a tab Design Lens cannot access, click the toolbar icon on that tab to grant access. Capture a page again after navigating or resizing when you need measurements from the new state. The collector works with the rendered main document. Restricted Chrome pages, cross-origin frames, unrendered content, and motion inside Canvas or WebGL have limited coverage. Scripts that directly update styles may also produce effects the Web Animations API cannot describe.
 
+### How color roles are inferred
+
+Color roles are read from what the page actually paints, not from a frequency count of raw CSS strings. A browser reports the same color in several notations, so every value is resolved to sRGB before it is counted, and the palette is exported as hex.
+
+- **primary** looks for a filled button or link first, then for a color painted behind high-contrast text, which is how most hero sections carry a brand color, and finally for the first stop of a gradient.
+- **surface** is the background the page's own text is read on, preferring a background the page paints outright.
+- **on-surface** and **on-primary** are the text colors actually used on those two backgrounds.
+
+Each role in the panel shows the evidence it came from, so a wrong guess can be corrected with the color picker. Roles are inferences, not declarations, and a page that states its design tokens in CSS gives better results than one that relies on defaults.
+
 ### Use the file with a design tool
 
 | Tool | How to provide the document |
@@ -73,6 +83,16 @@ Design Lens 是一款用于桌面版 Chrome 116 及更新版本的扩展。打�
 4. 在「Markdown」中预览、复制或下载 `DESIGN.md`。需要精确测量数据及动效参数时，通过「JSON」下载 `capture.json`。
 
 切换到尚未授权的标签页时，再次点击工具栏图标。缩放或导航后，可重新采集对应页面状态。首版主要读取已渲染的主文档，对 Chrome 受限页面、跨源 iframe、未渲染内容和 Canvas 或 WebGL 内部效果的覆盖有限。
+
+### 颜色角色的推断方式
+
+颜色角色来自页面实际绘制的颜色，而不是对 CSS 字符串做频次统计。浏览器会用多种写法表达同一个颜色，因此所有取值先解析为 sRGB 再统计，导出色板统一为十六进制。
+
+- **主色**先找有填充色的按钮或链接，再找承载高对比文字的背景色（多数首屏的品牌色属于这一类），最后找渐变的第一个色标。
+- **表面色**取页面正文实际所读的背景，页面自身声明的背景优先。
+- **表面上的文字**和**主色上的文字**取对应背景上真正使用过的文字颜色。
+
+面板会显示每个角色的推断依据，判断有误时可直接用取色器改写。这些角色属于推断而非声明，页面用 CSS 明确声明设计变量时，结果会比依赖浏览器默认值更准确。
 
 ### 交给设计技能
 

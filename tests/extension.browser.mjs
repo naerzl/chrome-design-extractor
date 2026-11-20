@@ -60,10 +60,11 @@ async function attachPanel(cdp, targetId) {
 
 test('loads the extension, captures a real web page, and downloads its design brief', { timeout: 45000 }, async (t) => {
   const demo = await readFile(new URL('../fixtures/field-notes.html', import.meta.url));
+  const hero = await readFile(new URL('../fixtures/landing-hero.html', import.meta.url));
   const server = createServer((req, res) => {
     if (!req.url?.startsWith('/fixture')) { res.writeHead(404).end(); return; }
     res.setHeader('content-type', 'text/html; charset=utf-8');
-    res.end(demo);
+    res.end(req.url.startsWith('/hero') ? hero : demo);
   }).listen(0, '127.0.0.1');
   await once(server, 'listening');
   const scratch = await mkdtemp(join(tmpdir(), 'design-lens-browser-'));
@@ -160,6 +161,71 @@ test('loads the extension, captures a real web page, and downloads its design br
 
     await page.goto(fixtureUrl + '?navigated');
     await until(() => panel.evaluate('document.querySelector("#results").hidden'), 'stale results to clear after navigation');
+  } finally {
+    await context?.close();
+    server.close();
+    await rm(scratch, { recursive: true, force: true });
+  }
+});
+
+test('finds a brand color that only exists behind a gradient hero', { timeout: 45000 }, async (t) => {
+  const hero = await readFile(new URL('../fixtures/landing-hero.html', import.meta.url));
+  const server = createServer((req, res) => {
+    res.setHeader('content-type', 'text/html; charset=utf-8');
+    res.end(hero);
+  }).listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const scratch = await mkdtemp(join(tmpdir(), 'design-lens-hero-'));
+  let context;
+  try {
+    const extensionPath = process.env.DESIGN_LENS_EXTENSION_PATH
+      ? resolve(process.env.DESIGN_LENS_EXTENSION_PATH)
+      : fileURLToPath(new URL('../dist/chrome/', import.meta.url));
+    context = await chromium.launchPersistentContext(join(scratch, 'profile'), {
+      channel: process.env.DESIGN_LENS_CHROME ? undefined : 'chromium',
+      executablePath: process.env.DESIGN_LENS_CHROME,
+      headless: process.env.DESIGN_LENS_HEADED !== '1',
+      locale: 'en-US',
+      viewport: null,
+      ignoreDefaultArgs: ['--disable-extensions'],
+      args: ['--enable-unsafe-extension-debugging', '--window-size=1500,940'],
+    });
+    context.setDefaultTimeout(5000);
+    const cdp = await context.browser().newBrowserCDPSession();
+    const { id } = await cdp.send('Extensions.loadUnpacked', { path: extensionPath });
+    await until(() => context.serviceWorkers().find((item) => item.url() === 'chrome-extension://' + id + '/background.js'), 'the extension service worker');
+    const page = context.pages()[0] ?? await context.newPage();
+    const heroUrl = 'http://127.0.0.1:' + server.address().port + '/hero';
+    await page.goto(heroUrl);
+    await page.bringToFront();
+    const targets = async () => (await cdp.send('Target.getTargets', { filter: [{}] })).targetInfos;
+    const tab = await until(async () => (await targets()).find((item) => item.type === 'tab' && item.url === heroUrl), 'the hero tab');
+    await cdp.send('Extensions.triggerAction', { id, targetId: tab.targetId });
+    const panelTarget = await until(async () => (await targets()).find((item) => item.type === 'page' && item.url === 'chrome-extension://' + id + '/index.html'), 'the Chrome side panel');
+    const panel = await attachPanel(cdp, panelTarget.targetId);
+    await until(() => panel.evaluate('Boolean(document.querySelector("#capture"))'), 'the panel UI');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await panel.evaluate('document.querySelector("#capture").click()');
+    await until(async () => {
+      const state = await panel.evaluate('({ failed: document.querySelector("#status").dataset.error === "true", ready: !document.querySelector("#results").hidden })');
+      if (state.failed) throw new Error('capture failed');
+      return state.ready;
+    }, 'page capture');
+    await panel.evaluate('document.querySelector("#markdown-tab").click()');
+    const markdown = await panel.evaluate('document.querySelector("#preview").value');
+    // The brand color appears only in the hero gradient, never as a flat fill.
+    assert.match(markdown, /primary: "#4F46E5"/);
+    assert.doesNotMatch(markdown, /primary: "#FFFFFF"/);
+    t.diagnostic('Primary color resolved from the hero backdrop.');
+
+    if (process.env.DESIGN_LENS_ARTIFACT_DIR) {
+      const artifactDir = resolve(process.env.DESIGN_LENS_ARTIFACT_DIR);
+      await mkdir(artifactDir, { recursive: true });
+      await writeFile(join(artifactDir, 'hero-DESIGN.md'), markdown);
+      await panel.evaluate('document.querySelector("#summary-tab").click()');
+      const screenshot = await panel.send('Page.captureScreenshot', { format: 'png' });
+      await writeFile(join(artifactDir, 'hero-side-panel.png'), Buffer.from(screenshot.data, 'base64'));
+    }
   } finally {
     await context?.close();
     server.close();

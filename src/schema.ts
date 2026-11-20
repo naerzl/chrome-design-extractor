@@ -22,6 +22,8 @@ export interface StyleSample {
   color: string;
   backgroundColor: string;
   borderColor: string;
+  /** Effective background painted behind this element by its nearest opaque ancestor. */
+  backdrop: string;
   fill: string;
   gradient: string;
   fontFamily: string;

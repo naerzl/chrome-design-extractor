@@ -13,6 +13,7 @@ function style(overrides: Partial<StyleSample>): StyleSample {
   return {
     role: 'container', rect: { x: 0, y: 0, width: 200, height: 44 },
     color: 'rgb(22, 40, 34)', backgroundColor: 'rgba(0, 0, 0, 0)', borderColor: '',
+    backdrop: 'rgb(246, 245, 239)',
     fill: '', gradient: '', fontFamily: 'system-ui', fontSize: '16px', fontWeight: '400',
     lineHeight: '24px', letterSpacing: 'normal', borderRadius: '0px', boxShadow: 'none',
     padding: '0px', margin: '0px', display: 'block', position: 'static', maxWidth: 'none',
@@ -82,4 +83,37 @@ test('JSON retains structured keyframes and omits the internal document identifi
   const data = exportCapture([sample()]);
   assert.doesNotMatch(data, /documentKey|internal-test-key/);
   assert.equal(JSON.parse(data).snapshots[0].motion[0].keyframes[0].values.transform, 'translateY(-2px)');
+});
+
+/**
+ * A brand color often lives in a gradient or in the backdrop of a hero rather
+ * than in a flat button fill. Inferring it by frequency alone used to pick the
+ * white text of a hero and report it as the primary color.
+ */
+function heroSample(): CaptureSnapshot {
+  const backdrop = 'rgb(99, 102, 241)';
+  return {
+    version: 1,
+    documentKey: 'internal-hero-key',
+    context: { width: 1440, height: 900, preferredTheme: 'light', reducedMotion: false },
+    coverage: { visited: 12, sampled: 6, omittedFrames: 0, partial: false },
+    samples: [
+      style({ role: 'page', backgroundColor: 'rgb(255, 255, 255)', backdrop: 'rgb(255, 255, 255)', rect: { x: 0, y: 0, width: 1440, height: 900 } }),
+      style({ role: 'section', backgroundColor: 'rgba(0, 0, 0, 0)', backdrop, rect: { x: 0, y: 62, width: 1440, height: 354 } }),
+      style({ role: 'heading', color: 'rgb(255, 255, 255)', backgroundColor: 'rgba(0, 0, 0, 0)', backdrop, rect: { x: 32, y: 158, width: 1376, height: 48 } }),
+      style({ role: 'text', color: 'rgb(237, 233, 254)', backgroundColor: 'rgba(0, 0, 0, 0)', backdrop, rect: { x: 32, y: 223, width: 463, height: 25 } }),
+      style({ role: 'button', color: 'rgb(15, 23, 42)', backgroundColor: 'rgb(255, 255, 255)', backdrop, rect: { x: 32, y: 276, width: 146, height: 44 } }),
+      style({ role: 'link', color: 'rgb(255, 255, 255)', backgroundColor: 'rgba(0, 0, 0, 0)', backdrop, rect: { x: 331, y: 288, width: 103, height: 18 } }),
+    ],
+    motion: [],
+  };
+}
+
+test('infers a primary color from a hero backdrop instead of its text', () => {
+  const palette = analyzeSnapshot(heroSample()).palette;
+  const primary = palette.find((entry) => entry.role === 'primary');
+  const surface = palette.find((entry) => entry.role === 'surface');
+  assert.equal(primary?.value, '#6366F1');
+  assert.equal(surface?.value, '#FFFFFF');
+  assert.notEqual(primary?.value, surface?.value);
 });

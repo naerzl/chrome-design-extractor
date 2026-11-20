@@ -7,12 +7,13 @@ import type {
   MotionSample,
   StyleSample,
 } from "./schema";
+import { gradientStops, topLevelTokens } from "./css-values";
+import { resolveColor } from "./color";
 
 const visitLimit = 5_000;
 const sampleLimit = 360;
 const motionLimit = 80;
 const captureBudgetMs = 350;
-const cssListLengthLimit = 8_192;
 const visibilityOptions: CheckVisibilityOptions = { checkOpacity: true, checkVisibilityCSS: true };
 
 const ariaRoles: Readonly<Record<string, ElementRole>> = {
@@ -113,39 +114,6 @@ function rounded(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-function topLevelTokens(value: string, separator: "," | " " = ","): string[] {
-  if (value.length > cssListLengthLimit) return [];
-  const result: string[] = [];
-  let start = 0;
-  let depth = 0;
-  let quote = "";
-  for (let index = 0; index < value.length; index++) {
-    const character = value[index];
-    if (character === "\\") {
-      index++;
-      continue;
-    }
-    if (quote) {
-      if (character === quote) quote = "";
-      continue;
-    }
-    if (character === '"' || character === "'") {
-      quote = character;
-      continue;
-    }
-    if (character === "(" || character === "[") depth++;
-    if (character === ")" || character === "]") depth--;
-    if (!depth && character === separator) {
-      const token = value.slice(start, index).trim();
-      if (token) result.push(token);
-      start = index + 1;
-    }
-  }
-  const final = value.slice(start).trim();
-  if (final) result.push(final);
-  return result;
-}
-
 function normalizedValue(value: string): string {
   // Keep parsed design values independent of resource URLs and arbitrary CSS references.
   if (value.length > 600 || !/^[a-z0-9%.#(),+\-/\s]*$/i.test(value)) return "";
@@ -163,6 +131,81 @@ function hasVisibleColor(value: string): boolean {
   return !!value && value !== "transparent"
     && !/^rgba\([^)]*,\s*0(?:\.0+)?\)$/i.test(value)
     && !/\/\s*0(?:\.0+)?%?\s*\)$/i.test(value);
+}
+
+interface Painted {
+  red: number;
+  green: number;
+  blue: number;
+  alpha: number;
+}
+
+/** The flat color this element paints, or the first stop of its gradient. */
+function ownBackground(element: Element, cache: Map<Element, Painted | null>): Painted | null {
+  const cached = cache.get(element);
+  if (cached !== undefined) return cached;
+  const style = getComputedStyle(element);
+  const flat = normalizedColor(style.backgroundColor);
+  let value: Painted | null = null;
+  if (hasVisibleColor(flat)) {
+    value = resolveColor(flat);
+  } else {
+    // A gradient covers the area it paints, so its first stop stands in for the fill.
+    const stop = (gradientStops(style.backgroundImage)[0] ?? [])
+      .map((value) => normalizedColor(value))
+      .map((value) => (value && hasVisibleColor(value) ? resolveColor(value) : null))
+      .find((value) => value !== null && value !== undefined);
+    if (stop) value = stop;
+  }
+  cache.set(element, value);
+  return value;
+}
+
+function composite(top: Painted, bottom: Painted): Painted {
+  const alpha = top.alpha + bottom.alpha * (1 - top.alpha);
+  if (alpha === 0) return { red: 0, green: 0, blue: 0, alpha: 0 };
+  const mix = (a: number, b: number) => (a * top.alpha + b * bottom.alpha * (1 - top.alpha)) / alpha;
+  return { red: mix(top.red, bottom.red), green: mix(top.green, bottom.green), blue: mix(top.blue, bottom.blue), alpha };
+}
+
+function paintHex(color: Painted): string {
+  const hex = [color.red, color.green, color.blue]
+    .map((value) => Math.round(value).toString(16).padStart(2, "0"))
+    .join("")
+    .toUpperCase();
+  const alpha = Math.round(color.alpha * 255);
+  return alpha === 255 ? `#${hex}` : `#${hex}${alpha.toString(16).padStart(2, "0").toUpperCase()}`;
+}
+
+/**
+ * The background a visitor actually sees behind this element: its own fill
+ * composited over the nearest painted ancestor.
+ */
+function backdropOf(element: Element, own: Map<Element, Painted | null>, cache: Map<Element, string>): string {
+  const cached = cache.get(element);
+  if (cached !== undefined) return cached;
+  const fill = ownBackground(element, own);
+  let ancestor: Painted | null = null;
+  let parent = element.parentElement;
+  while (parent) {
+    const painted = ownBackground(parent, own);
+    if (painted) {
+      ancestor = painted;
+      break;
+    }
+    const known = cache.get(parent);
+    if (known !== undefined) {
+      ancestor = known ? resolveColor(known) : null;
+      break;
+    }
+    parent = parent.parentElement;
+  }
+  // Nothing painted anywhere means the browser canvas shows through.
+  const below = ancestor ?? canvasColor();
+  const result = fill ? composite(fill, below) : below;
+  const hex = result && result.alpha > 0 ? paintHex(result) : "";
+  cache.set(element, hex);
+  return hex;
 }
 
 function firstBorderColor(style: CSSStyleDeclaration): string {
@@ -194,7 +237,7 @@ function cssFontStack(value: string): string {
 }
 
 function styleSample(
-  element: Element, style: CSSStyleDeclaration, rect: DOMRect, role: ElementRole,
+  element: Element, style: CSSStyleDeclaration, rect: DOMRect, role: ElementRole, backdrop: string,
 ): StyleSample {
   return {
     role,
@@ -202,6 +245,7 @@ function styleSample(
     color: normalizedColor(style.color),
     backgroundColor: normalizedColor(style.backgroundColor),
     borderColor: firstBorderColor(style),
+    backdrop,
     fill: element instanceof SVGGeometryElement ? normalizedColor(style.fill) : "",
     gradient: gradientLayers(style.backgroundImage),
     fontFamily: cssFontStack(style.fontFamily),
@@ -377,6 +421,15 @@ function captureContext(): CaptureSnapshot["context"] {
   };
 }
 
+/**
+ * The color the browser paints behind a page whose root has no background.
+ * Chrome uses white in light mode and a near black in dark mode.
+ */
+function canvasColor(): Painted {
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  return dark ? { red: 18, green: 18, blue: 18, alpha: 1 } : { red: 255, green: 255, blue: 255, alpha: 1 };
+}
+
 async function capture(documentKey: string): Promise<CaptureSnapshot> {
   const context = captureContext();
   const { width, height } = context;
@@ -386,6 +439,8 @@ async function capture(documentKey: string): Promise<CaptureSnapshot> {
       ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
   });
   const samples: StyleSample[] = [];
+  const ownBackgrounds = new Map<Element, Painted | null>();
+  const backdrops = new Map<Element, string>();
   const motion = new Map<string, MotionSample>();
   scanEffects(motion, new WeakSet());
   let element: Element | null = root;
@@ -397,7 +452,7 @@ async function capture(documentKey: string): Promise<CaptureSnapshot> {
       const style = getComputedStyle(element);
       if (style.visibility === "visible" && Number(style.opacity) > 0) {
         const role = elementRole(element);
-        samples.push(styleSample(element, style, rect, role));
+        samples.push(styleSample(element, style, rect, role, backdropOf(element, ownBackgrounds, backdrops)));
         if (motion.size < motionLimit) {
           for (const motionSample of declarations(style, role)) addMotion(motion, motionSample);
         }

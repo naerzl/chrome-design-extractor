@@ -185,6 +185,7 @@ function presentPalette(view: CapturedView) {
       ui.preview.value = markdown();
     });
     label.append(swatch, make('span', colorRole, 'swatch-role'), select);
+    if (entry.basis) label.append(make('span', entry.basis, 'swatch-basis'));
     swatches.append(label);
   }
   section.append(make('p', t.inferred, 'hint'), swatches);
