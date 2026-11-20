@@ -272,6 +272,32 @@ function chroma(color: string): number {
     - Math.min(resolved.red, resolved.green, resolved.blue);
 }
 
+/**
+ * Saturation as a 0-1 fraction.
+ * Muted slate text such as #354052 sits near 0.2 while a brand purple such as
+ * #6258E8 sits near 0.76, so saturation separates them where plain color
+ * distance does not.
+ */
+function saturation(color: string): number {
+  const resolved = resolveColor(color);
+  if (!resolved) return 0;
+  const red = resolved.red / 255;
+  const green = resolved.green / 255;
+  const blue = resolved.blue / 255;
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  if (max === min) return 0;
+  const lightness = (max + min) / 2;
+  return lightness > 0.5 ? (max - min) / (2 - max - min) : (max - min) / (max + min);
+}
+
+/** Whether a color reads as a deliberate accent rather than a neutral tone. */
+function isBrandColor(color: string): boolean {
+  // A dark neutral such as #0F172A has a high saturation ratio but almost no
+  // color distance, so both measures have to agree before a color counts.
+  return chroma(color) >= 48 && saturation(color) >= 0.25;
+}
+
 /** Text-bearing roles. Only these elements can tell us what a backdrop is used for. */
 const textRoles = new Set<ElementRole>(['text', 'heading', 'button', 'link', 'input']);
 
@@ -385,6 +411,7 @@ function inferPalette(snapshot: CaptureSnapshot, samples: StyleSample[]): Palett
   add('on-surface', onSurface, 'text color read on the page surface');
 
   const ink = onSurface?.color;
+  const inkKey = ink ? colorKey(ink) : null;
   const actions = samples.filter(({ role }) => role === 'button' || role === 'link');
   const filledActions = actions.filter((sample) => {
     // A gradient fill counts as a fill even though there is no flat background.
@@ -405,12 +432,25 @@ function inferPalette(snapshot: CaptureSnapshot, samples: StyleSample[]): Palett
     actions.filter((sample) => gradientStops(sample.gradient).length > 0),
   )[0];
 
+  // Many apps express their brand color as the text of a selected control
+  // rather than as a fill, so a saturated action text color counts too.
+  const actionText = commonColor(
+    actions.filter((sample) => {
+      const value = colorOf(sample, 'color');
+      if (!value || !isBrandColor(value)) return false;
+      const key = colorKey(value);
+      return key !== null && key !== surface?.key && key !== inkKey;
+    }),
+    'color',
+    areaOf,
+  );
+
   // A brand color is frequently the backdrop of a hero rather than a flat button fill.
   const backdrops = backdropUses(samples);
   const brandBackdrop = backdrops.find((use) => {
     if (use.key === surface?.key) return false;
     // A neutral fill such as an input field's gray is not a brand color.
-    if (chroma(use.color) < 24) return false;
+    if (!isBrandColor(use.color)) return false;
     const onBackdrop = foregroundOn(samples, use.color);
     if (!onBackdrop || colorKey(onBackdrop.color) === use.key) return false;
     const ratio = contrastRatio(use.color, onBackdrop.color);
@@ -420,12 +460,20 @@ function inferPalette(snapshot: CaptureSnapshot, samples: StyleSample[]): Palett
 
   let primary: { color: string; samples: number } | undefined;
   let primaryBasis = '';
-  if (actionFill) {
-    primary = actionFill;
+  // A neutral fill such as a white button is not a brand color on its own.
+  const saturatedFill = actionFill && isBrandColor(actionFill.color) ? actionFill : undefined;
+  if (saturatedFill) {
+    primary = saturatedFill;
     primaryBasis = 'fill of a button or link that differs from its own text';
   } else if (actionGradient) {
     primary = { color: actionGradient.color, samples: actionGradient.samples };
     primaryBasis = 'first color stop of a button or link gradient';
+  } else if (actionText) {
+    primary = actionText;
+    primaryBasis = 'text color of a selected button or link';
+  } else if (actionFill) {
+    primary = actionFill;
+    primaryBasis = 'fill of a button or link that differs from its own text';
   } else if (brandBackdrop && brandBackdrop.area > 0) {
     primary = { color: brandBackdrop.color, samples: brandBackdrop.samples };
     primaryBasis = 'color painted behind high-contrast text';
@@ -433,11 +481,7 @@ function inferPalette(snapshot: CaptureSnapshot, samples: StyleSample[]): Palett
     primary = { color: gradients[0].color, samples: gradients[0].samples };
     primaryBasis = 'first color stop of the largest gradient';
   } else {
-    const inkKey = ink ? colorKey(ink) : null;
-    primary = commonColor(actions.filter((sample) => {
-      const value = colorOf(sample, 'color');
-      return value !== null && colorKey(value) !== inkKey;
-    }), 'color');
+    primary = actionText;
     primaryBasis = 'text color of a button or link';
   }
   add('primary', primary, primaryBasis);

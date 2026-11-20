@@ -154,3 +154,32 @@ test('infers a primary color from a gradient button instead of a gray input fill
   assert.match(primary?.basis ?? '', /gradient/);
   assert.equal(palette.find((entry) => entry.role === 'surface')?.value, '#FFFFFF');
 });
+
+/**
+ * Some apps never paint their brand color as a fill. It appears only as the
+ * text of a selected control, next to buttons that are plain white.
+ */
+function selectedTextSample(): CaptureSnapshot {
+  return {
+    version: 1,
+    documentKey: 'internal-selected-text-key',
+    context: { width: 1440, height: 900, preferredTheme: 'light', reducedMotion: false },
+    coverage: { visited: 30, sampled: 6, omittedFrames: 0, partial: false },
+    samples: [
+      style({ role: 'page', backgroundColor: 'rgb(244, 246, 251)', backdrop: 'rgb(244, 246, 251)', rect: { x: 0, y: 0, width: 1440, height: 900 } }),
+      style({ role: 'text', color: 'rgb(16, 24, 40)', backdrop: 'rgb(244, 246, 251)', rect: { x: 270, y: 60, width: 400, height: 24 } }),
+      style({ role: 'button', color: 'rgb(53, 64, 82)', backgroundColor: 'rgb(255, 255, 255)', backdrop: 'rgb(255, 255, 255)', rect: { x: 270, y: 120, width: 219, height: 36 } }),
+      style({ role: 'button', color: 'rgb(91, 76, 232)', backgroundColor: 'rgb(255, 255, 255)', backdrop: 'rgb(255, 255, 255)', rect: { x: 500, y: 120, width: 96, height: 41 } }),
+      style({ role: 'button', color: 'rgb(123, 135, 152)', backgroundColor: 'rgb(255, 255, 255)', backdrop: 'rgb(255, 255, 255)', rect: { x: 1200, y: 20, width: 32, height: 32 } }),
+      style({ role: 'link', color: 'rgb(70, 81, 102)', backgroundColor: 'rgba(0, 0, 0, 0)', backdrop: 'rgb(255, 255, 255)', rect: { x: 270, y: 200, width: 195, height: 36 } }),
+    ],
+    motion: [],
+  };
+}
+
+test('infers a primary color from selected control text instead of a white button', () => {
+  const palette = analyzeSnapshot(selectedTextSample()).palette;
+  const primary = palette.find((entry) => entry.role === 'primary');
+  assert.equal(primary?.value, '#5B4CE8');
+  assert.match(primary?.basis ?? '', /selected button or link/);
+});
