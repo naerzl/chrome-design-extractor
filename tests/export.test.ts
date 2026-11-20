@@ -117,3 +117,40 @@ test('infers a primary color from a hero backdrop instead of its text', () => {
   assert.equal(surface?.value, '#FFFFFF');
   assert.notEqual(primary?.value, surface?.value);
 });
+
+/**
+ * A button painted with a gradient has no flat background color, so the brand
+ * color only exists in the gradient's first stop. A nearby input field's light
+ * gray fill must not win the primary role.
+ */
+function gradientButtonSample(): CaptureSnapshot {
+  return {
+    version: 1,
+    documentKey: 'internal-gradient-key',
+    context: { width: 1440, height: 900, preferredTheme: 'light', reducedMotion: false },
+    coverage: { visited: 20, sampled: 5, omittedFrames: 0, partial: false },
+    samples: [
+      style({ role: 'page', backgroundColor: 'rgb(255, 255, 255)', backdrop: 'rgb(255, 255, 255)', rect: { x: 0, y: 0, width: 1440, height: 900 } }),
+      style({ role: 'input', backgroundColor: 'rgb(241, 242, 242)', backdrop: 'rgb(241, 242, 242)', rect: { x: 880, y: 370, width: 400, height: 44 } }),
+      style({
+        role: 'button',
+        color: 'rgb(255, 255, 255)',
+        backgroundColor: 'rgba(0, 0, 0, 0)',
+        backdrop: 'rgb(0, 79, 248)',
+        gradient: 'linear-gradient(135deg, rgb(0, 79, 248) 0%, rgb(193, 123, 255) 100%)',
+        rect: { x: 880, y: 685, width: 400, height: 44 },
+      }),
+      style({ role: 'link', color: 'rgb(30, 134, 255)', backdrop: 'rgb(255, 255, 255)', rect: { x: 880, y: 537, width: 48, height: 16 } }),
+      style({ role: 'text', color: 'rgb(31, 31, 31)', backdrop: 'rgb(255, 255, 255)', rect: { x: 880, y: 343, width: 101, height: 16 } }),
+    ],
+    motion: [],
+  };
+}
+
+test('infers a primary color from a gradient button instead of a gray input fill', () => {
+  const palette = analyzeSnapshot(gradientButtonSample()).palette;
+  const primary = palette.find((entry) => entry.role === 'primary');
+  assert.equal(primary?.value, '#004FF8');
+  assert.match(primary?.basis ?? '', /gradient/);
+  assert.equal(palette.find((entry) => entry.role === 'surface')?.value, '#FFFFFF');
+});
