@@ -38,8 +38,8 @@ function describeLayout(entry: LayoutEntry): string {
 const colorUse: Record<string, string> = {
   surface: 'Page or dominant content surface',
   'on-surface': 'Text color read on the page surface',
-  primary: 'Candidate emphasis color from buttons, links, and colored backdrops',
-  'on-primary': 'Foreground sampled from actions using the candidate primary fill',
+  primary: 'Primary emphasis color',
+  'on-primary': 'Foreground for the primary color',
   'surface-container': 'Secondary region or component surface',
   outline: 'Frequently observed visible border color',
   icon: 'Common SVG icon fill',
@@ -95,7 +95,7 @@ export function exportDesign(analysis: DesignAnalysis, options: DesignExportOpti
   lines.push('---', '', `# ${markText(name)}`);
   addHeading(lines, '## Overview');
   lines.push(markText(analysis.overview));
-  lines.push('', 'Design roles and reusable patterns are inferred from the visible sample. Measurements describe the captured states.');
+  lines.push('', 'Color roles use computed theme values when available. Other design roles and patterns are inferred from the visible sample. Measurements describe the captured states.');
 
   if (palette.length || analysis.gradients.length) {
     addHeading(lines, '## Colors');
@@ -177,5 +177,5 @@ export function exportDesign(analysis: DesignAnalysis, options: DesignExportOpti
 
 export function exportCapture(snapshots: CaptureSnapshot | CaptureSnapshot[]): string {
   const list = Array.isArray(snapshots) ? snapshots : [snapshots];
-  return JSON.stringify({ version: 1, snapshots: list.map(({ version, context, samples, motion, coverage }) => ({ version, context, samples, motion, coverage })) }, null, 2) + '\n';
+  return JSON.stringify({ version: 1, snapshots: list.map(({ version, context, samples, themeColors, motion, coverage }) => ({ version, context, samples, themeColors, motion, coverage })) }, null, 2) + '\n';
 }

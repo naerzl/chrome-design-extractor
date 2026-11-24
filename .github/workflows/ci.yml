@@ -24,15 +24,12 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:browser
       - run: npm run package
-      - name: Verify release package
-        working-directory: dist
+      - name: Test the release package in Chromium
         run: |
-          for archive in extension-chrome-v*.zip; do
-            sha256sum --check "$archive.sha256"
-            unzip -t "$archive" manifest.json
-          done
+          (cd dist && sha256sum --check extension-chrome-v*.zip.sha256)
+          unzip -q dist/extension-chrome-v*.zip -d "$RUNNER_TEMP/design-lens"
+          DESIGN_LENS_EXTENSION_PATH="$RUNNER_TEMP/design-lens" node --test --test-concurrency=1 tests/*.browser.mjs
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: chrome-extension

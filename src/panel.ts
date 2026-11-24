@@ -15,9 +15,11 @@ app.innerHTML = `
   </header>
   <main>
     <section class="capture-card" id="capture-card" aria-labelledby="capture-title">
-      <h1 id="capture-title">${t.emptyTitle}</h1>
+      <div class="capture-heading">
+        <h1 id="capture-title">${t.emptyTitle}</h1>
+        <span id="recording-timer" class="recording-timer" role="timer" hidden></span>
+      </div>
       <p id="capture-description">${t.emptyBody}</p>
-      <div class="sample-map" id="sample-map" aria-hidden="true"><span></span><span></span><span></span></div>
       <details class="context" id="context" hidden>
         <summary id="context-heading">${t.showContext}</summary>
         <ul id="context-details"></ul>
@@ -28,25 +30,27 @@ app.innerHTML = `
         <button type="button" class="capture-secondary" id="record" hidden>${t.record}</button>
       </div>
     </section>
-    <p class="status" id="status" role="status"></p>
     <section id="results" class="results" hidden>
       <label class="document-name" for="document-name">${t.sourceLabel}
         <input id="document-name" maxlength="100" placeholder="${t.sourcePlaceholder}" autocomplete="off">
       </label>
-      <div class="view-toggle" role="group">
-        <button type="button" id="summary-tab" aria-controls="summary-view" aria-pressed="true">${t.summary}</button>
-        <button type="button" id="markdown-tab" aria-controls="markdown-view" aria-pressed="false">${t.document}</button>
+      <div class="view-toggle" id="view-tabs" role="tablist" aria-label="${t.resultViews}">
+        <button type="button" id="summary-tab" role="tab" aria-controls="summary-view" aria-selected="true">${t.summary}</button>
+        <button type="button" id="markdown-tab" role="tab" aria-controls="markdown-view" aria-selected="false" tabindex="-1">${t.document}</button>
       </div>
-      <div id="summary-view"></div>
-      <div id="markdown-view" class="preview" hidden>
+      <div id="summary-view" role="tabpanel" aria-labelledby="summary-tab" tabindex="0"></div>
+      <div id="markdown-view" class="preview" role="tabpanel" aria-labelledby="markdown-tab" hidden>
         <textarea id="preview" aria-label="${t.previewLabel}" readonly wrap="soft" spellcheck="false"></textarea>
       </div>
     </section>
   </main>
-  <footer id="export-actions" hidden>
-    <button type="button" class="primary" id="download">${t.save}</button>
-    <button type="button" id="copy">${t.copy}</button>
-    <button type="button" id="json" title="${t.aboutData}" aria-label="${t.aboutData}">${t.data}</button>
+  <footer class="action-dock">
+    <p class="status" id="status" role="status"></p>
+    <div class="export-actions" id="export-actions" hidden>
+      <button type="button" class="primary" id="download">${t.save}</button>
+      <button type="button" id="copy">${t.copy}</button>
+      <button type="button" id="json" title="${t.aboutData}" aria-label="${t.aboutData}">${t.data}</button>
+    </div>
   </footer>
 </div>`;
 
@@ -57,10 +61,10 @@ function element<T extends HTMLElement = HTMLElement>(id: string): T {
 const ui = {
   captureCard: element('capture-card'), title: element('capture-title'), description: element('capture-description'),
   capture: element<HTMLButtonElement>('capture'), compare: element<HTMLButtonElement>('compare'),
-  record: element<HTMLButtonElement>('record'), status: element('status'), samples: element('sample-map'),
+  record: element<HTMLButtonElement>('record'), timer: element('recording-timer'), status: element('status'),
   context: element<HTMLDetailsElement>('context'), contextHeading: element('context-heading'),
   contextDetails: element('context-details'), results: element('results'),
-  name: element<HTMLInputElement>('document-name'), summaryToggle: element<HTMLButtonElement>('summary-tab'),
+  name: element<HTMLInputElement>('document-name'), viewTabs: element('view-tabs'), summaryToggle: element<HTMLButtonElement>('summary-tab'),
   markdownToggle: element<HTMLButtonElement>('markdown-tab'), summary: element('summary-view'), markdown: element('markdown-view'),
   preview: element<HTMLTextAreaElement>('preview'), actions: element('export-actions'),
 };
@@ -147,7 +151,9 @@ function presentList(title: string, empty: string, rows: [string, string][]) {
 
 function presentPalette(view: CapturedView) {
   const section = make('section');
-  section.append(make('h2', t.palette));
+  const heading = make('div', undefined, 'section-heading');
+  heading.append(make('h2', t.palette));
+  section.append(heading);
   const palette = view.analysis.palette;
   if (palette.length === 0) {
     section.append(make('p', t.noPalette, 'hint'));
@@ -161,11 +167,22 @@ function presentPalette(view: CapturedView) {
       if (color && colors.size < 30) colors.add(color);
     }
   }
+  const reset = make('button', t.resetColors, 'reset-colors');
+  reset.type = 'button';
+  reset.id = 'reset-colors';
+  heading.append(reset);
   const swatches = make('div', undefined, 'palette');
-  for (const entry of palette) {
+  const updateSwatches: Array<() => void> = [];
+  const ordered = palette.filter(({ role }) => role === 'primary').concat(palette.filter(({ role }) => role !== 'primary'));
+  for (const entry of ordered) {
     const colorRole = roleLabel(entry.role);
     const label = make('label', undefined, 'swatch-item');
+    label.dataset.colorRole = entry.role;
     const swatch = make('span', undefined, 'swatch');
+    const details = make('span', undefined, 'swatch-details');
+    const basis = make('span', undefined, 'swatch-basis');
+    basis.title = entry.basis;
+    details.append(make('span', colorRole, 'swatch-role'), basis);
     const select = make('select');
     select.setAttribute('aria-label', t.swatchRole(colorRole));
     const current = overrides[entry.role] ?? entry.value;
@@ -174,21 +191,38 @@ function presentPalette(view: CapturedView) {
       option.value = value;
       select.append(option);
     }
-    select.value = current;
-    swatch.style.backgroundColor = current;
+    const update = () => {
+      const color = overrides[entry.role] ?? entry.value;
+      const edited = color !== entry.value;
+      select.value = color;
+      swatch.style.backgroundColor = color;
+      label.dataset.edited = String(edited);
+      basis.textContent = edited ? t.editedColor : entry.evidence === 'declared' ? t.cssColor : t.sampledColor;
+    };
+    update();
+    updateSwatches.push(update);
     select.addEventListener('change', () => {
       const color = normalizeDesignColor(select.value);
       if (!color) return;
       if (color === entry.value) delete overrides[entry.role];
       else overrides[entry.role] = color;
-      swatch.style.backgroundColor = color;
+      update();
+      reset.hidden = !swatches.querySelector('[data-edited="true"]');
       ui.preview.value = markdown();
     });
-    label.append(swatch, make('span', colorRole, 'swatch-role'), select);
-    if (entry.basis) label.append(make('span', entry.basis, 'swatch-basis'));
+    label.append(swatch, details, select);
     swatches.append(label);
   }
-  section.append(make('p', t.inferred, 'hint'), swatches);
+  reset.hidden = !swatches.querySelector('[data-edited="true"]');
+  reset.addEventListener('click', () => {
+    const editedControl = swatches.querySelector<HTMLSelectElement>('[data-edited="true"] select');
+    overrides = {};
+    updateSwatches.forEach((update) => update());
+    reset.hidden = true;
+    ui.preview.value = markdown();
+    editedControl?.focus();
+  });
+  section.append(swatches);
   return section;
 }
 
@@ -234,27 +268,29 @@ function setMode(next: typeof mode) {
   mode = next;
   ui.summary.hidden = next !== 'summary';
   ui.markdown.hidden = next !== 'markdown';
-  ui.summaryToggle.setAttribute('aria-pressed', String(next === 'summary'));
-  ui.markdownToggle.setAttribute('aria-pressed', String(next === 'markdown'));
+  ui.summaryToggle.setAttribute('aria-selected', String(next === 'summary'));
+  ui.markdownToggle.setAttribute('aria-selected', String(next === 'markdown'));
+  ui.summaryToggle.tabIndex = next === 'summary' ? 0 : -1;
+  ui.markdownToggle.tabIndex = next === 'markdown' ? 0 : -1;
   if (next === 'markdown') ui.preview.value = markdown();
 }
 
 function renderControls() {
   const primary = views[0];
-  ui.samples.hidden = Boolean(primary);
   ui.context.hidden = !primary;
   ui.capture.hidden = Boolean(recording);
   ui.compare.hidden = !primary || Boolean(recording);
   ui.record.hidden = !primary;
   ui.capture.disabled = busy;
+  ui.capture.textContent = primary ? t.recapture : t.capture;
   ui.compare.disabled = busy;
   ui.record.disabled = busy || Boolean(recording?.finishing);
   ui.captureCard.dataset.recording = String(Boolean(recording));
   ui.record.classList.toggle('stop', Boolean(recording));
-  ui.record.textContent = recording ? t.stop : t.record;
-  ui.title.textContent = primary ? t.readyTitle : t.emptyTitle;
-  ui.description.textContent = recording ? t.recording : primary ? '' : t.emptyBody;
-  ui.description.hidden = !ui.description.textContent;
+  ui.record.textContent = recording?.finishing ? t.finishing : recording ? t.stop : t.record;
+  ui.title.textContent = recording ? t.recordingTitle : primary ? t.readyTitle : t.emptyTitle;
+  ui.description.hidden = Boolean(primary);
+  ui.timer.hidden = !recording || recording.finishing;
   updateTimer();
   if (!primary) return;
   ui.contextHeading.textContent = `${viewDimensions(primary)} • ${t.showContext}`;
@@ -269,9 +305,10 @@ function renderControls() {
 }
 
 function updateTimer() {
-  if (!recording) return;
+  if (!recording || recording.finishing) return;
   const remaining = Math.max(0, Math.ceil((recording.end - Date.now()) / 1000));
-  ui.status.textContent = t.recordingTime(remaining);
+  const time = t.recordingTime(remaining);
+  if (ui.timer.textContent !== time) ui.timer.textContent = time;
 }
 
 async function queryActiveTab(): Promise<chrome.tabs.Tab | undefined> {
@@ -346,6 +383,12 @@ async function capture(append: boolean) {
         next.analysis = analyzeSnapshot(next.snapshot);
         next.snapshot.motion = next.analysis.motion;
         views[prior] = next;
+        if (prior === 0) {
+          for (const role of Object.keys(overrides)) {
+            const color = next.analysis.palette.find((entry) => entry.role === role);
+            if (!color || color.value === overrides[role]) delete overrides[role];
+          }
+        }
         notify(t.sameViewport);
       } else {
         const atLimit = views.length === maxViews;
@@ -356,7 +399,7 @@ async function capture(append: boolean) {
       if (primary && primary.target.documentId !== target.documentId) ui.name.value = '';
       views = [next];
       overrides = {};
-      notify(append ? t.captureChanged : t.captured);
+      notify(append ? t.captureChanged : t.captured(snapshot.coverage.sampled));
     }
     renderResults();
   } catch (error) {
@@ -427,6 +470,7 @@ async function startRecording() {
       }, 250),
       finishing: false,
     };
+    notify(t.recording);
   } catch (error) {
     if (generation === attempt) displayError(error);
   } finally {
@@ -475,16 +519,28 @@ ui.record.addEventListener('click', () => {
 });
 ui.summaryToggle.addEventListener('click', () => setMode('summary'));
 ui.markdownToggle.addEventListener('click', () => setMode('markdown'));
+ui.viewTabs.addEventListener('keydown', (event) => {
+  let next: typeof mode;
+  if (event.key === 'Home') next = 'summary';
+  else if (event.key === 'End') next = 'markdown';
+  else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') next = mode === 'summary' ? 'markdown' : 'summary';
+  else return;
+  event.preventDefault();
+  setMode(next);
+  (next === 'summary' ? ui.summaryToggle : ui.markdownToggle).focus();
+});
 ui.name.addEventListener('input', () => { if (mode === 'markdown') ui.preview.value = markdown(); });
 element('download').addEventListener('click', () => download('DESIGN.md', markdown(), 'text/markdown;charset=utf-8'));
 element('json').addEventListener('click', () => {
   download('capture.json', exportCapture(views.map((view) => view.snapshot)), 'application/json');
 });
 element('copy').addEventListener('click', async () => {
+  const attempt = generation;
   try {
     await navigator.clipboard.writeText(markdown());
-    notify(t.copied);
+    if (generation === attempt) notify(t.copied);
   } catch {
+    if (generation !== attempt) return;
     setMode('markdown');
     ui.preview.focus();
     ui.preview.select();

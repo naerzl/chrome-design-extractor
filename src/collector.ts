@@ -8,7 +8,7 @@ import type {
   StyleSample,
 } from "./schema";
 import { gradientStops, topLevelTokens } from "./css-values";
-import { resolveColor } from "./color";
+import { colorKey, resolveColor } from "./color";
 
 const visitLimit = 5_000;
 const sampleLimit = 360;
@@ -430,10 +430,52 @@ function canvasColor(): Painted {
   return dark ? { red: 18, green: 18, blue: 18, alpha: 1 } : { red: 255, green: 255, blue: 255, alpha: 1 };
 }
 
+function captureThemeColors(element: Element): CaptureSnapshot["themeColors"] {
+  const style = getComputedStyle(element);
+  function readDeclaration(name: string): string | undefined {
+    const value = style.getPropertyValue(name).trim();
+    if (CSS.supports("color", value)) return value;
+    // Some themes store only the channels and wrap the variable in hsl() at the point of use.
+    const hsl = `hsl(${value})`;
+    return CSS.supports("color", hsl) ? hsl : undefined;
+  }
+  const declaration = readDeclaration("--primary");
+  if (!declaration) return undefined;
+  const foreground = readDeclaration("--primary-foreground");
+  const paint = new OffscreenCanvas(1, 1).getContext("2d", { willReadFrequently: true });
+  if (!paint) return undefined;
+
+  // Resolve color expressions in the document's inherited context, then read sRGB and alpha.
+  // The probe is hidden and removed before layout and animation sampling.
+  const probe = document.createElementNS("http://www.w3.org/1999/xhtml", "span");
+  probe.style.setProperty("display", "none", "important");
+  probe.style.setProperty("forced-color-adjust", "none", "important");
+  const readColor = (value: string): string | undefined => {
+    probe.style.setProperty("color", value, "important");
+    paint.clearRect(0, 0, 1, 1);
+    paint.fillStyle = "transparent";
+    paint.fillStyle = getComputedStyle(probe).color;
+    paint.fillRect(0, 0, 1, 1);
+    const [red, green, blue, alpha] = paint.getImageData(0, 0, 1, 1).data;
+    return alpha === 255 ? colorKey(`rgb(${red}, ${green}, ${blue})`) ?? undefined : undefined;
+  };
+
+  element.append(probe);
+  try {
+    const primary = readColor(declaration);
+    if (!primary) return undefined;
+    const onPrimary = foreground && readColor(foreground);
+    return { primary, ...(onPrimary ? { onPrimary } : {}) };
+  } finally {
+    probe.remove();
+  }
+}
+
 async function capture(documentKey: string): Promise<CaptureSnapshot> {
   const context = captureContext();
   const { width, height } = context;
   const root = document.documentElement;
+  const themeColors = captureThemeColors(document.body ?? root);
   const scanner = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
     acceptNode: (node) => ignoredTags.has((node as Element).localName)
       ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
@@ -464,6 +506,7 @@ async function capture(documentKey: string): Promise<CaptureSnapshot> {
   }
   return {
     version: 1, documentKey, context, samples, motion: [...motion.values()],
+    ...(themeColors ? { themeColors } : {}),
     coverage: {
       visited,
       sampled: samples.length,
@@ -489,7 +532,11 @@ function recordMotion(durationMs: number): { motion: Map<string, MotionSample>; 
   const interval = window.setInterval(() => scanEffects(motion, seen), 64);
   const timeout = window.setTimeout(stop, durationMs);
   const visibilityChange = () => { if (document.hidden) stop(); };
+  let stopped = false;
   function stop(): void {
+    if (stopped) return;
+    stopped = true;
+    if (!document.hidden) scanEffects(motion, seen);
     window.clearInterval(interval);
     window.clearTimeout(timeout);
     document.removeEventListener("transitionrun", listener, true);
@@ -550,10 +597,12 @@ function install(): void {
         reply({ ok: true, type: "start-recording", documentKey, durationMs, context: captureContext() });
         return;
       }
-      case "stop-recording":
-        reply({ ok: true, type: "stop-recording", documentKey, context: captureContext(), motion: [...(recording?.motion.values() ?? [])] });
+      case "stop-recording": {
+        const session = recording;
         releaseRecording();
+        reply({ ok: true, type: "stop-recording", documentKey, context: captureContext(), motion: [...(session?.motion.values() ?? [])] });
         return;
+      }
     }
   });
 }

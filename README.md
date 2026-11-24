@@ -2,7 +2,7 @@
 
 Export the visual language of the current web page as a portable `DESIGN.md`. Design Lens is a Manifest V3 extension for desktop Chrome 116 and newer. It captures computed styles, layout, and browser-observable motion from the tab you authorize, then prepares a document you can use with design tools and coding agents.
 
-[简体中文](#简体中文) · [Privacy policy](PRIVACY.md) · [Contributing](CONTRIBUTING.md) · [MIT license](LICENSE)
+[Download the Chrome extension](https://github.com/naerzl/chrome-design-extractor/releases/latest) · [简体中文](#简体中文) · [Privacy policy](PRIVACY.md) · [Contributing](CONTRIBUTING.md) · [MIT license](LICENSE)
 
 ## Install from a ZIP
 
@@ -15,21 +15,21 @@ For a manual update, replace the files in the installed directory with the new p
 ## Capture and export
 
 1. Open a regular web page and click **Design Lens** in Chrome's toolbar to grant access to that tab and open the side panel.
-2. Choose **Capture page** and review its palette, typography, and layout. Adjust inferred color roles if needed. Resize the browser and choose **Add this viewport** for a responsive comparison. Opening the side panel can reduce the page viewport, so check the captured dimensions.
+2. Choose **Capture page** to inspect the palette, typography, and layout. Choose a sampled color to edit a role or use **Restore colors** to return to the captured values. Resize the browser and choose **Add this viewport** to compare layouts. The capture details show the effective viewport size.
 3. Choose **Record motion**, then hover, click, or scroll in the page. Recording ends after eight seconds or when you choose **Stop recording**. CSS declarations and observed animations can represent different evidence, and a trigger can be unknown.
-4. Open the **Markdown** tab to preview `DESIGN.md`, then copy or download it. Choose **JSON** to keep detailed measurements and animation parameters.
+4. Open the **Markdown** tab to preview `DESIGN.md`. Use the export bar to download the file, copy Markdown, or save detailed capture data as JSON.
 
 If you switch to a tab Design Lens cannot access, click the toolbar icon on that tab to grant access. Capture a page again after navigating or resizing when you need measurements from the new state. The collector works with the rendered main document. Restricted Chrome pages, cross-origin frames, unrendered content, and motion inside Canvas or WebGL have limited coverage. Scripts that directly update styles may also produce effects the Web Animations API cannot describe.
 
-### How color roles are inferred
+### How color roles are detected
 
-Color roles are read from what the page actually paints, not from a frequency count of raw CSS strings. A browser reports the same color in several notations, so every value is resolved to sRGB before it is counted, and the palette is exported as hex.
+Design Lens reads computed theme colors and samples painted elements. The palette is normalized to sRGB and exported as hex.
 
-- **primary** looks for a filled button or link first, then for a color painted behind high-contrast text, which is how most hero sections carry a brand color, and finally for the first stop of a gradient.
+- **primary** prefers the opaque color declared in the computed `--primary` variable on the page body, including HSL channels used by some themes. When that value is unavailable, Design Lens looks at action fills, action gradients, colored action text, and prominent backdrops.
 - **surface** is the background the page's own text is read on, preferring a background the page paints outright.
-- **on-surface** and **on-primary** are the text colors actually used on those two backgrounds.
+- **on-surface** samples text on the page surface. **on-primary** prefers the matching `--primary-foreground` variable when present and otherwise samples text on controls using the detected primary fill.
 
-Each role in the panel shows the evidence it came from, so a wrong guess can be corrected with the color picker. Roles are inferences, not declarations, and a page that states its design tokens in CSS gives better results than one that relies on defaults.
+Each role shows its source in the panel, where you can also adjust the exported value.
 
 ### Use the file with a design tool
 
@@ -56,7 +56,7 @@ npm run package
 
 Load `dist/chrome/` in Chrome for a local build, or use `dist/extension-chrome-vX.Y.Z.zip` for installation by ZIP. The neighboring `.sha256` file contains the checksum. To try a predictable example, run `npm run demo`, open `http://localhost:4173/fixtures/field-notes.html`, and capture the included Field Notes page.
 
-The browser smoke test builds the extension and loads it in Chromium.
+The browser suite builds and loads the extension in Chromium. It covers toolbar access, color editing, viewport comparison, motion recording, and both export formats. CI runs the same suite from the extracted release ZIP.
 
 ```sh
 npx playwright install chromium
@@ -78,21 +78,21 @@ Design Lens 是一款用于桌面版 Chrome 116 及更新版本的扩展。打�
 ### 采集和导出
 
 1. 打开网页，从 Chrome 工具栏点击 Design Lens，授权当前标签页并打开侧栏。
-2. 点击「采集页面」，查看配色、字体和布局，可手动调整推断的颜色角色。改变浏览器大小后点击「补采此视口」，便于比较响应式布局。请以采集详情显示的视口为准，侧栏可能改变网页的布局。
+2. 点击「采集页面」查看配色、字体和布局。可为颜色角色选择样本色，也可点击「还原配色」恢复采集值。调整浏览器大小后点击「补采此视口」对比布局，以采集详情显示的视口尺寸为准。
 3. 点击「录制动效」，在网页上悬停、点击或滚动。录制在八秒后结束，也可以手动点击「结束录制」。查看结果时可以结合样式声明和实际观测判断动效，触发条件可能未知。
-4. 在「Markdown」中预览、复制或下载 `DESIGN.md`。需要精确测量数据及动效参数时，通过「JSON」下载 `capture.json`。
+4. 在「Markdown」中预览 `DESIGN.md`。使用底部导出栏下载文件、复制 Markdown，或将测量数据和动效参数保存为 `capture.json`。
 
 切换到尚未授权的标签页时，再次点击工具栏图标。缩放或导航后，可重新采集对应页面状态。首版主要读取已渲染的主文档，对 Chrome 受限页面、跨源 iframe、未渲染内容和 Canvas 或 WebGL 内部效果的覆盖有限。
 
-### 颜色角色的推断方式
+### 配色采集
 
-颜色角色来自页面实际绘制的颜色，而不是对 CSS 字符串做频次统计。浏览器会用多种写法表达同一个颜色，因此所有取值先解析为 sRGB 再统计，导出色板统一为十六进制。
+扩展读取当前主题的计算值和页面的可见样式，导出 sRGB 十六进制色值。
 
-- **主色**先找有填充色的按钮或链接，再找承载高对比文字的背景色（多数首屏的品牌色属于这一类），最后找渐变的第一个色标。
-- **表面色**取页面正文实际所读的背景，页面自身声明的背景优先。
-- **表面上的文字**和**主色上的文字**取对应背景上真正使用过的文字颜色。
+- **主色**优先读取 `--primary`，支持以 HSL 通道保存的主题变量。变量无有效值时，从按钮、链接和突出背景的样式推断。
+- **表面色**优先取页面声明的背景，**表面上的文字**取该背景上的采样文字色。
+- **主色上的文字**优先读取 `--primary-foreground`，也可从采用主色填充的操作控件取样。
 
-面板会显示每个角色的推断依据，判断有误时可直接用取色器改写。这些角色属于推断而非声明，页面用 CSS 明确声明设计变量时，结果会比依赖浏览器默认值更准确。
+面板标明每种颜色来自 CSS 变量、可见样本还是手动调整。
 
 ### 交给设计技能
 

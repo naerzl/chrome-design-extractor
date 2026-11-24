@@ -72,6 +72,10 @@ export interface CaptureSnapshot {
     reducedMotion: boolean;
   };
   samples: StyleSample[];
+  themeColors?: {
+    primary: string;
+    onPrimary?: string;
+  };
   motion: MotionSample[];
   coverage: {
     visited: number;

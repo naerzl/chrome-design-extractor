@@ -67,14 +67,14 @@ components:
 
 Visible design traits include \#F6F5EF, Georgia, serif, a multicolumn grid, gradient treatments.
 
-Design roles and reusable patterns are inferred from the visible sample. Measurements describe the captured states.
+Color roles use computed theme values when available. Other design roles and patterns are inferred from the visible sample. Measurements describe the captured states.
 
 ## Colors
 
 - **surface** `#F6F5EF`. Page or dominant content surface (background the page text is read on (1212480 px²)).
 - **on-surface** `#162822`. Text color read on the page surface (text color read on the page surface).
-- **primary** `#145344`. Candidate emphasis color from buttons, links, and colored backdrops (fill of a button or link that differs from its own text).
-- **on-primary** `#FFFFFF`. Foreground sampled from actions using the candidate primary fill (text sitting on the primary fill).
+- **primary** `#145344`. Primary emphasis color (fill of a button or link that differs from its own text).
+- **on-primary** `#FFFFFF`. Foreground for the primary color (text sitting on the primary fill).
 - **surface-container** `#FFFCF5`. Secondary region or component surface (largest secondary background (251896 px²)).
 - **outline** `#CCD9CD`. Frequently observed visible border color (most common visible border color).
 - Observed gradient `radial-gradient(at 78% 20%, rgb(255, 252, 245), rgba(0, 0, 0, 0) 52%), linear-gradient(135deg, rgb(206, 224, 198), rgb(246, 245, 239))`.
@@ -138,19 +138,16 @@ Motion evidence at 1440 × 900 CSS px.
 | Target | Evidence | Source | Properties | Duration | Delay | Easing | Iterations |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | button | observed | css-transition | `transform` | 180ms | 0ms | `ease-out` | 1 |
-| button | observed | css-transition | `transform` | 51.68314611992551ms | 0ms | `ease-out` | 1 |
+| button | observed | css-transition | `transform` | 51.63854159683003ms | 0ms | `ease-out` | 1 |
 | container | observed | css-animation | `opacity`, `transform` | 420ms | 0ms | `ease-in-out` | 1 |
+| container | observed | web-animation | `opacity`, `transform` | 480ms | 0ms | `cubic-bezier(0.2, 0.7, 0.2, 1)` | 1 |
 | button | declared | css-transition | `transform` | 180ms | 0ms | `ease-out` | 1 |
 
 Motion evidence at 390 × 900 CSS px.
 
 | Target | Evidence | Source | Properties | Duration | Delay | Easing | Iterations |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| button | observed | css-transition | `transform` | 51.68314611992551ms | 0ms | `ease-out` | 1 |
-| container | observed | css-animation | `opacity`, `transform` | 420ms | 0ms | `ease-in-out` | 1 |
-| container | observed | web-animation | `opacity`, `transform` | 480ms | 0ms | `cubic-bezier(0.2, 0.7, 0.2, 1)` | 1 |
 | button | declared | css-transition | `transform` | 180ms | 0ms | `ease-out` | 1 |
-| container | declared | css-animation | Unknown | 420ms | 0ms | `ease-in-out` | 1 |
 
 Declared motion comes from computed CSS. Observed motion was active during sampling. Interaction triggers require separate verification.
 

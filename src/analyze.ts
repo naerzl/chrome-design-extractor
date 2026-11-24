@@ -6,8 +6,8 @@ export interface PaletteEntry {
   role: string;
   value: string;
   samples: number;
-  evidence: 'inferred';
-  /** Where the inference found this color, shown so a user can judge or override it. */
+  evidence: 'declared' | 'inferred';
+  /** Where this color came from, shown so a user can judge or override it. */
   basis: string;
 }
 
@@ -368,13 +368,13 @@ function gradientUses(samples: StyleSample[]): ColorUse[] {
 
 function inferPalette(snapshot: CaptureSnapshot, samples: StyleSample[]): PaletteEntry[] {
   const entries: PaletteEntry[] = [];
-  const add = (role: string, color: { color: string; samples: number } | undefined, basis: string) => {
+  const add = (role: string, color: { color: string; samples: number } | undefined, basis: string, evidence: PaletteEntry['evidence'] = 'inferred') => {
     if (color) {
       entries.push({
         role,
         value: displayColor(color.color),
         samples: color.samples,
-        evidence: 'inferred',
+        evidence,
         basis,
       });
     }
@@ -460,9 +460,13 @@ function inferPalette(snapshot: CaptureSnapshot, samples: StyleSample[]): Palett
 
   let primary: { color: string; samples: number } | undefined;
   let primaryBasis = '';
+  const declaredPrimary = snapshot.themeColors?.primary;
   // A neutral fill such as a white button is not a brand color on its own.
   const saturatedFill = actionFill && isBrandColor(actionFill.color) ? actionFill : undefined;
-  if (saturatedFill) {
+  if (declaredPrimary) {
+    primary = { color: declaredPrimary, samples: 0 };
+    primaryBasis = 'computed CSS variable --primary';
+  } else if (saturatedFill) {
     primary = saturatedFill;
     primaryBasis = 'fill of a button or link that differs from its own text';
   } else if (actionGradient) {
@@ -484,10 +488,13 @@ function inferPalette(snapshot: CaptureSnapshot, samples: StyleSample[]): Palett
     primary = actionText;
     primaryBasis = 'text color of a button or link';
   }
-  add('primary', primary, primaryBasis);
+  add('primary', primary, primaryBasis, declaredPrimary ? 'declared' : 'inferred');
 
-  if (actionFill) {
-    const fillKey = colorKey(actionFill.color);
+  const declaredOnPrimary = snapshot.themeColors?.onPrimary;
+  if (declaredOnPrimary) {
+    add('on-primary', { color: declaredOnPrimary, samples: 0 }, 'computed CSS variable --primary-foreground', 'declared');
+  } else if (primary) {
+    const fillKey = colorKey(primary.color);
     const onPrimary = commonColor(filledActions.filter((sample) => {
       const value = colorOf(sample, 'backgroundColor');
       return value !== null && colorKey(value) === fillKey;
